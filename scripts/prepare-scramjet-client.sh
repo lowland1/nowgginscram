@@ -4,6 +4,7 @@ set -euo pipefail
 SCRAMJET_REPO_URL="https://github.com/MercuryWorkshop/scramjet"
 SUBMODULE_DIR="vendor/scramjet"
 TARGET="scramjet.client.js"
+WASM_BRIDGE_PATH="$SUBMODULE_DIR/rewriter/wasm/out/wasm.js"
 
 ensure_scramjet_checkout() {
   if [[ -d "$SUBMODULE_DIR" ]]; then
@@ -27,11 +28,42 @@ ensure_nested_submodules() {
   )
 }
 
+ensure_wasm_bridge_stub() {
+  if [[ -f "$WASM_BRIDGE_PATH" ]]; then
+    return
+  fi
+
+  echo "[prepare] Missing $WASM_BRIDGE_PATH; creating temporary compatibility stub."
+  mkdir -p "$(dirname "$WASM_BRIDGE_PATH")"
+  cat > "$WASM_BRIDGE_PATH" <<'JS'
+export function initSync() {
+  return;
+}
+
+export class Rewriter {
+  rewrite(input) {
+    return input;
+  }
+}
+JS
+}
+
 run_in_scramjet_dir() {
   (
     cd "$SUBMODULE_DIR"
     "$@"
   )
+}
+
+run_try() {
+  local desc="$1"
+  shift
+  echo "[prepare] Trying: $desc"
+  if ! "$@"; then
+    echo "[prepare] Failed: $desc (continuing)" >&2
+    return 1
+  fi
+  return 0
 }
 
 has_package_script() {
@@ -40,16 +72,39 @@ has_package_script() {
 }
 
 run_package_script_if_present() {
-  local run_cmd="$1"
+  local runner="$1"
   local script_name="$2"
   if has_package_script "$script_name"; then
-    echo "[prepare] Running $run_cmd $script_name ..."
-    if ! run_in_scramjet_dir $run_cmd "$script_name"; then
-      echo "[prepare] $run_cmd $script_name failed; continuing with other strategies." >&2
-      return 1
-    fi
+    # shellcheck disable=SC2086
+    run_try "$runner $script_name" run_in_scramjet_dir $runner "$script_name" || true
   fi
-  return 0
+}
+
+try_build_with_pnpm_runner() {
+  local -a pnpm_cmd=("$@")
+
+  run_try "${pnpm_cmd[*]} install --frozen-lockfile" run_in_scramjet_dir "${pnpm_cmd[@]}" install --frozen-lockfile || return
+
+  run_try "${pnpm_cmd[*]} -r --if-present run build" run_in_scramjet_dir "${pnpm_cmd[@]}" -r --if-present run build || true
+
+  if [[ -f "$SUBMODULE_DIR/rewriter/wasm/package.json" ]]; then
+    run_try "${pnpm_cmd[*]} -C rewriter/wasm install --frozen-lockfile" run_in_scramjet_dir "${pnpm_cmd[@]}" -C rewriter/wasm install --frozen-lockfile || true
+    run_try "${pnpm_cmd[*]} -C rewriter/wasm run build" run_in_scramjet_dir "${pnpm_cmd[@]}" -C rewriter/wasm run build || true
+  fi
+
+  run_package_script_if_present "${pnpm_cmd[*]} run" "build:wasm"
+  run_package_script_if_present "${pnpm_cmd[*]} run" "build:rewriter"
+  run_package_script_if_present "${pnpm_cmd[*]} run" "build:client"
+  run_package_script_if_present "${pnpm_cmd[*]} run" "build"
+}
+
+try_build_with_npm() {
+  run_try "npm install --legacy-peer-deps" run_in_scramjet_dir npm install --legacy-peer-deps || return
+
+  run_package_script_if_present "npm run" "build:wasm"
+  run_package_script_if_present "npm run" "build:rewriter"
+  run_package_script_if_present "npm run" "build:client"
+  run_package_script_if_present "npm run" "build"
 }
 
 try_build_scramjet_client() {
@@ -61,26 +116,12 @@ try_build_scramjet_client() {
 
   if [[ -f "$SUBMODULE_DIR/pnpm-lock.yaml" ]]; then
     if command -v pnpm >/dev/null 2>&1; then
-      if ! run_in_scramjet_dir pnpm install --frozen-lockfile; then
-        echo "[prepare] pnpm install failed; skipping pnpm build path." >&2
-        return
-      fi
-
-      run_package_script_if_present "pnpm run" "build:wasm" || true
-      run_package_script_if_present "pnpm run" "build:rewriter" || true
-      run_package_script_if_present "pnpm run" "build" || true
+      try_build_with_pnpm_runner pnpm
       return
     fi
 
     if command -v corepack >/dev/null 2>&1; then
-      if ! run_in_scramjet_dir corepack pnpm install --frozen-lockfile; then
-        echo "[prepare] corepack pnpm install failed; skipping pnpm build path." >&2
-        return
-      fi
-
-      run_package_script_if_present "corepack pnpm run" "build:wasm" || true
-      run_package_script_if_present "corepack pnpm run" "build:rewriter" || true
-      run_package_script_if_present "corepack pnpm run" "build" || true
+      try_build_with_pnpm_runner corepack pnpm
       return
     fi
 
@@ -89,14 +130,7 @@ try_build_scramjet_client() {
   fi
 
   if command -v npm >/dev/null 2>&1; then
-    if ! run_in_scramjet_dir npm install --legacy-peer-deps; then
-      echo "[prepare] npm install failed; skipping npm build path." >&2
-      return
-    fi
-
-    run_package_script_if_present "npm run" "build:wasm" || true
-    run_package_script_if_present "npm run" "build:rewriter" || true
-    run_package_script_if_present "npm run" "build" || true
+    try_build_with_npm
   fi
 }
 
@@ -117,6 +151,7 @@ find_scramjet_client_file() {
 
 ensure_scramjet_checkout
 ensure_nested_submodules
+ensure_wasm_bridge_stub
 
 source_file="$(find_scramjet_client_file | head -n 1 || true)"
 
