@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Now.gg Scramjet Launcher</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, sans-serif;
+        background: radial-gradient(circle at top, #1a2135, #0b0d14 58%);
+        color: #e9edf5;
+        min-height: 100vh;
+      }
+      #launch-screen {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.2rem;
+      }
+      .card {
+        width: min(540px, 96vw);
+        border: 1px solid #2f3a54;
+        background: #131a2b;
+        border-radius: 14px;
+        padding: 1.1rem;
+        box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+      }
+      .card h1 { margin: 0 0 .5rem; font-size: 1.2rem; }
+      .card p { margin: 0; color: #b6bfd5; }
+      #start-btn {
+        margin-top: 1rem;
+        border: 0;
+        border-radius: 10px;
+        background: #2b7fff;
+        color: white;
+        padding: .8rem 1rem;
+        width: 100%;
+        font-size: 1rem;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      #status { margin-top: .8rem; font-size: .92rem; }
+      .ok { color: #7ce38b; }
+      .warn { color: #ffcc73; }
+
+      #proxy-frame {
+        display: none;
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        background: #fff;
+      }
+      body.playing #launch-screen { display: none; }
+      body.playing #proxy-frame { display: block; }
+    </style>
+  </head>
+  <body>
+    <main id="launch-screen">
+      <section class="card">
+        <h1>Now.gg via Scramjet</h1>
+        <p>Click start to open nowgg.fun in a full-page proxy view (no browser fullscreen API).</p>
+        <button id="start-btn" type="button">Start</button>
+        <div id="status" class="warn">Ready to start.</div>
+      </section>
+    </main>
+
+    <iframe id="proxy-frame" referrerpolicy="no-referrer"></iframe>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
