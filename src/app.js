@@ -22,25 +22,44 @@ function isAllowedDomain(rawUrl) {
   }
 }
 
-function findRewriteFunction() {
+function normalizeRewriteCandidate(candidate, owner = null) {
+  if (typeof candidate !== "function") return null;
+  if (!owner) return candidate;
+  return candidate.bind(owner);
+}
+
+function findRewriteFunctionFromGlobals() {
   const candidates = [
-    window.__scramjet$rewriteUrl,
-    window.$scramjet?.rewriteUrl,
-    window.scramjet?.rewriteUrl,
-    window.ScramjetController?.rewriteUrl,
+    [window.__scramjet$rewriteUrl, null],
+    [window.$scramjet?.rewriteUrl, window.$scramjet],
+    [window.scramjet?.rewriteUrl, window.scramjet],
+    [window.ScramjetController?.rewriteUrl, window.ScramjetController],
   ];
-  return candidates.find((candidate) => typeof candidate === "function") ?? null;
+
+  for (const [fn, owner] of candidates) {
+    const normalized = normalizeRewriteCandidate(fn, owner);
+    if (normalized) return normalized;
+  }
+
+  return null;
 }
 
 function findRewriteFunctionFromModule(moduleNs) {
   if (!moduleNs) return null;
+
   const candidates = [
-    moduleNs.__scramjet$rewriteUrl,
-    moduleNs.rewriteUrl,
-    moduleNs.default?.rewriteUrl,
-    moduleNs.default,
+    [moduleNs.__scramjet$rewriteUrl, moduleNs],
+    [moduleNs.rewriteUrl, moduleNs],
+    [moduleNs.default?.rewriteUrl, moduleNs.default],
+    [moduleNs.default, null],
   ];
-  return candidates.find((candidate) => typeof candidate === "function") ?? null;
+
+  for (const [fn, owner] of candidates) {
+    const normalized = normalizeRewriteCandidate(fn, owner);
+    if (normalized) return normalized;
+  }
+
+  return null;
 }
 
 function getBasePathPrefix() {
@@ -63,23 +82,21 @@ function loadClassicScript(src) {
 }
 
 async function loadClientCandidate(src) {
-  // Try ES module first (often used in CI-produced modern bundles).
   const moduleNs = await import(src).then(
     (moduleNamespace) => moduleNamespace,
     () => null,
   );
 
   if (moduleNs) {
-    return findRewriteFunctionFromModule(moduleNs) ?? findRewriteFunction();
+    return findRewriteFunctionFromModule(moduleNs) ?? findRewriteFunctionFromGlobals();
   }
 
-  // Fallback for UMD/IIFE bundles.
   await loadClassicScript(src);
-  return findRewriteFunction();
+  return findRewriteFunctionFromGlobals();
 }
 
 async function ensureScramjetClient() {
-  const existing = findRewriteFunction();
+  const existing = findRewriteFunctionFromGlobals();
   if (existing) return existing;
 
   const base = getBasePathPrefix();
@@ -95,23 +112,11 @@ async function ensureScramjetClient() {
       const rewrite = await loadClientCandidate(src);
       if (rewrite) return rewrite;
     } catch {
-      // Try next path.
       console.debug?.(`[scramjet-loader] Failed to load candidate: ${src}`);
     }
   }
 
   return null;
-}
-
-async function enterFullscreen() {
-  const node = document.documentElement;
-  if (!document.fullscreenElement && node.requestFullscreen) {
-    try {
-      await node.requestFullscreen();
-    } catch {
-      // Non-fatal; continue with viewport fill fallback.
-    }
-  }
 }
 
 async function start() {
@@ -134,9 +139,17 @@ async function start() {
     return;
   }
 
+  let proxied;
+  try {
+    proxied = rewriteUrl(DEFAULT_URL);
+  } catch {
+    setStatus("Scramjet loaded but rewrite failed. Rebuild/publish scramjet.client.js and retry.", "warn");
+    startBtn.disabled = false;
+    return;
+  }
+
   document.body.classList.add("playing");
-  await enterFullscreen();
-  frame.src = rewriteUrl(DEFAULT_URL);
+  frame.src = proxied;
 }
 
 startBtn.addEventListener("click", () => {

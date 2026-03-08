@@ -63,13 +63,13 @@
     <main id="launch-screen">
       <section class="card">
         <h1>Now.gg via Scramjet</h1>
-        <p>Click start to open nowgg.fun in a full-page proxy view.</p>
+        <p>Click start to open nowgg.fun in a full-page proxy view (no browser fullscreen API).</p>
         <button id="start-btn" type="button">Start</button>
         <div id="status" class="warn">Ready to start.</div>
       </section>
     </main>
 
-    <iframe id="proxy-frame" referrerpolicy="no-referrer" allowfullscreen></iframe>
+    <iframe id="proxy-frame" referrerpolicy="no-referrer"></iframe>
 
     <script type="module" src="./src/app.js"></script>
   </body>
