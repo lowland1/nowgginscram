@@ -48,6 +48,7 @@ async function ensureScramjetClient() {
   if (existing) return existing;
 
   const candidates = [
+    "/scramjet.client.js",
     "/vendor/scramjet/dist/scramjet.client.js",
     "/vendor/scramjet/static/scramjet.client.js",
     "/vendor/scramjet/scramjet.client.js",
@@ -90,7 +91,7 @@ async function start() {
   const rewriteUrl = await ensureScramjetClient();
   if (!rewriteUrl) {
     setStatus(
-      "Scramjet client not found, so proxy launch was cancelled (prevents URI mismatch errors). Run ./scripts/setup-scramjet-submodule.sh and serve again.",
+      "Scramjet client not found. If deploying on Render, make sure build runs git submodule update --init --recursive and ./scripts/prepare-scramjet-client.sh.",
       "warn",
     );
     startBtn.disabled = false;
