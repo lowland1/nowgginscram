@@ -32,6 +32,16 @@ function findRewriteFunction() {
   return candidates.find((candidate) => typeof candidate === "function") ?? null;
 }
 
+function findRewriteFunctionFromModule(moduleNs) {
+  if (!moduleNs) return null;
+  const candidates = [
+    moduleNs.__scramjet$rewriteUrl,
+    moduleNs.rewriteUrl,
+    moduleNs.default?.rewriteUrl,
+    moduleNs.default,
+  ];
+  return candidates.find((candidate) => typeof candidate === "function") ?? null;
+}
 
 function getBasePathPrefix() {
   const parts = window.location.pathname.split("/").filter(Boolean);
@@ -41,7 +51,7 @@ function getBasePathPrefix() {
   return "/";
 }
 
-function loadScript(src) {
+function loadClassicScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
@@ -50,6 +60,22 @@ function loadScript(src) {
     script.onerror = () => reject(new Error(`Failed to load ${src}`));
     document.head.appendChild(script);
   });
+}
+
+async function loadClientCandidate(src) {
+  // Try ES module first (often used in CI-produced modern bundles).
+  const moduleNs = await import(src).then(
+    (moduleNamespace) => moduleNamespace,
+    () => null,
+  );
+
+  if (moduleNs) {
+    return findRewriteFunctionFromModule(moduleNs) ?? findRewriteFunction();
+  }
+
+  // Fallback for UMD/IIFE bundles.
+  await loadClassicScript(src);
+  return findRewriteFunction();
 }
 
 async function ensureScramjetClient() {
@@ -66,11 +92,11 @@ async function ensureScramjetClient() {
 
   for (const src of candidates) {
     try {
-      await loadScript(src);
-      const rewrite = findRewriteFunction();
+      const rewrite = await loadClientCandidate(src);
       if (rewrite) return rewrite;
     } catch {
       // Try next path.
+      console.debug?.(`[scramjet-loader] Failed to load candidate: ${src}`);
     }
   }
 
