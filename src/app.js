@@ -32,6 +32,15 @@ function findRewriteFunction() {
   return candidates.find((candidate) => typeof candidate === "function") ?? null;
 }
 
+
+function getBasePathPrefix() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  if (window.location.hostname.endsWith("github.io") && parts.length > 0) {
+    return `/${parts[0]}/`;
+  }
+  return "/";
+}
+
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
@@ -47,11 +56,12 @@ async function ensureScramjetClient() {
   const existing = findRewriteFunction();
   if (existing) return existing;
 
+  const base = getBasePathPrefix();
   const candidates = [
-    "/scramjet.client.js",
-    "/vendor/scramjet/dist/scramjet.client.js",
-    "/vendor/scramjet/static/scramjet.client.js",
-    "/vendor/scramjet/scramjet.client.js",
+    `${base}scramjet.client.js`,
+    `${base}vendor/scramjet/dist/scramjet.client.js`,
+    `${base}vendor/scramjet/static/scramjet.client.js`,
+    `${base}vendor/scramjet/scramjet.client.js`,
   ];
 
   for (const src of candidates) {
@@ -91,7 +101,7 @@ async function start() {
   const rewriteUrl = await ensureScramjetClient();
   if (!rewriteUrl) {
     setStatus(
-      "Scramjet client not found. If deploying on Render, make sure build runs git submodule update --init --recursive and ./scripts/prepare-scramjet-client.sh.",
+      "Scramjet client not found. If using GitHub Pages, enable the included Pages workflow so scramjet.client.js is published. For local/other hosts, run ./scripts/prepare-scramjet-client.sh.",
       "warn",
     );
     startBtn.disabled = false;

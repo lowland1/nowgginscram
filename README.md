@@ -24,6 +24,27 @@ python3 -m http.server 4173
 
 4. Open `http://localhost:4173` and click **Start**.
 
+## GitHub Pages deployment
+
+This repo includes `.github/workflows/deploy-pages.yml`.
+
+- It checks out submodules recursively.
+- It runs `./scripts/prepare-scramjet-client.sh` to publish `scramjet.client.js`.
+- It uploads and deploys the site to Pages.
+
+In GitHub repo settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+
+## Vercel deployment
+
+`vercel.json` is included.
+
+- It runs `git submodule update --init --recursive` during build.
+- It runs `./scripts/prepare-scramjet-client.sh` so `scramjet.client.js` is published.
+- It serves the repository root as the static output directory.
+
+If you deploy via the Vercel dashboard, make sure the project uses this repo's `vercel.json` and does not override the build command.
+
 ## Render deployment
 
 `render.yaml` is included. Its build command:
