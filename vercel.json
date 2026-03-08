@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "git submodule update --init --recursive && ./scripts/prepare-scramjet-client.sh",
+  "outputDirectory": "."
+}
